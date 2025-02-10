@@ -89,5 +89,3 @@ void LEDTask(void *argument)
 2. 任务函数的基本结构
 3. FreeRTOS延时函数的使用
 4. GPIO的基本控制
-
-您要开始创建这个项目吗？我可以指导您一步步在STM32CubeMX中完成配置。 

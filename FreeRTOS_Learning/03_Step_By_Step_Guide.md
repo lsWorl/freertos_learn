@@ -137,5 +137,3 @@ void LED_Task(void const * argument)
   - priority: 任务优先级（osPriorityNormal等）
   - instances: 任务实例数（通常为0）
   - stacksz: 堆栈大小（单位为字）
-
-现在，您可以按照这个指南一步步操作。需要我详细解释某个步骤吗？ 

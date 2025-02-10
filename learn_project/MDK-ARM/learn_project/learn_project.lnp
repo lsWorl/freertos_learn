@@ -4,6 +4,7 @@
 "learn_project\gpio.o"
 "learn_project\freertos.o"
 "learn_project\dma.o"
+"learn_project\tim.o"
 "learn_project\usart.o"
 "learn_project\stm32f1xx_it.o"
 "learn_project\stm32f1xx_hal_msp.o"

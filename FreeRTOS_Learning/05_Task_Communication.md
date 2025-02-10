@@ -471,4 +471,118 @@ void Monitor_Task(void *argument)
   }
 }
 /* USER CODE END Application */
-```
+
+## 七、实际代码示例
+
+以下是任务通信的完整示例代码：
+
+```c
+/* 通信机制句柄定义 */
+osMessageQueueId_t KeyQueueHandle;
+osSemaphoreId_t LED_SemHandle;
+osEventFlagsId_t LED_EventHandle;
+
+/* 通信机制属性定义 */
+const osMessageQueueAttr_t KeyQueue_attributes = {
+    .name = "KeyQueue"
+};
+
+const osSemaphoreAttr_t LED_Sem_attributes = {
+    .name = "LEDSem"
+};
+
+const osEventFlagsAttr_t LED_Event_attributes = {
+    .name = "LEDEvent"
+};
+
+/* 事件标志位定义 */
+#define LED1_EVENT_BIT 0x01
+#define LED2_EVENT_BIT 0x02
+
+/* 按键任务实现 - 同时使用队列、信号量和事件标志 */
+void KEY_Task(void *argument)
+{
+  uint8_t key_state;
+  uint8_t key_last_state = 1;
+
+  for (;;)
+  {
+    key_state = HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin);
+
+    // 检测到按键按下（下降沿）
+    if (key_state == 0 && key_last_state == 1)
+    {
+      DEBUG_Print("Key Pressed!\r\n");
+
+      // 1. 发送按键消息到队列
+      osMessageQueuePut(KeyQueueHandle, &key_state, 0, 0);
+
+      // 2. 释放信号量，触发LED1闪烁
+      osSemaphoreRelease(LED_SemHandle);
+
+      // 3. 设置事件标志，触发LED2翻转
+      osEventFlagsSet(LED_EventHandle, LED2_EVENT_BIT);
+    }
+
+    key_last_state = key_state;
+    osDelay(20); // 按键消抖延时
+  }
+}
+
+/* 初始化函数 */
+void MX_FREERTOS_Init(void)
+{
+  /* USER CODE BEGIN Init */
+  // 初始化串口互斥量
+  UART_Init();
+  /* USER CODE END Init */
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  memPoolMutexHandle = osMutexNew(&memPoolMutex_attributes);
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  LED_SemHandle = osSemaphoreNew(1, 1, &LED_Sem_attributes);
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  // 创建LED呼吸灯定时器（周期性，1000ms）
+  LED_Breath_TimerHandle = osTimerNew(LED_Breath_Timer_Callback, osTimerPeriodic, NULL, &LED_Breath_Timer_attributes);
+  if (LED_Breath_TimerHandle == NULL)
+  {
+    DEBUG_Print("LED Breath Timer creation failed!\r\n");
+    Error_Handler();
+  }
+
+  // 创建状态打印定时器（周期性，1000ms）
+  Print_TimerHandle = osTimerNew(Print_Timer_Callback, osTimerPeriodic, NULL, &Print_Timer_attributes);
+  if (Print_TimerHandle == NULL)
+  {
+    DEBUG_Print("Print Timer creation failed!\r\n");
+    Error_Handler();
+  }
+
+  // 启动定时器
+  osTimerStart(Print_TimerHandle, 1000);       // 500ms周期
+  osTimerStart(LED_Breath_TimerHandle, 1000); // 1000ms周期
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  KeyQueueHandle = osMessageQueueNew(4, sizeof(uint8_t), &KeyQueue_attributes);
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of defaultTask */
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  LED1TaskHandle = osThreadNew(LED1_Task, NULL, &LED1Task_attributes);
+  LED2TaskHandle = osThreadNew(LED2_Task, NULL, &LED2Task_attributes);
+  KEY_TaskHandle = osThreadNew(KEY_Task, NULL, &KEY_Task_attributes);
+  MonitorTaskHandle = osThreadNew(Monitor_Task, NULL, &MonitorTask_attributes);
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  LED_EventHandle = osEventFlagsNew(&LED_Event_attributes);
+  /* USER CODE END RTOS_EVENTS */
+}

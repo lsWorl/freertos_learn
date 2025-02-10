@@ -181,4 +181,111 @@ void MX_GPIO_Init(void)
    - 避免关中断时间过长
    - 合理使用临界区保护
 
-您要开始实现这个中断管理的示例吗？我们可以先配置外部中断，然后实现中断处理和LED控制任务。 
+## 七、实际代码示例
+
+以下是中断管理的完整示例代码：
+
+```c
+/* 中断事件标志位定义 */
+#define INT_LED1_EVENT_BIT 0x04
+#define INT_LED2_EVENT_BIT 0x08
+
+/* 中断事件标志位定义 */
+#define EVT_TIMER_UPDATE 0x01 // 定时器更新事件
+#define EVT_KEY_PRESS 0x02    // 按键按下事件
+#define EVT_UART_CMD 0x04     // 串口命令事件
+
+/* 中断控制任务句柄 */
+osThreadId_t IntLedTaskHandle;
+
+/* 中断控制任务属性 */
+const osThreadAttr_t IntLed_attributes = {
+    .name = "IntLedTask",
+    .stack_size = 256,
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+/* 中断控制LED任务 */
+void IntLed_Task(void *argument)
+{
+  EventBits_t uxBits;
+
+  for (;;)
+  {
+    // 等待中断触发的事件
+    uxBits = xEventGroupWaitBits(
+        LED_EventHandle,
+        INT_LED1_EVENT_BIT | INT_LED2_EVENT_BIT,
+        pdTRUE,  // 清除事件标志
+        pdFALSE, // 任一事件满足即可
+        portMAX_DELAY);
+
+    // 处理事件
+    if ((uxBits & INT_LED1_EVENT_BIT) != 0)
+    {
+      HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+      DEBUG_Print("LED1 Toggled by Interrupt\r\n");
+    }
+    if ((uxBits & INT_LED2_EVENT_BIT) != 0)
+    {
+      HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+      DEBUG_Print("LED2 Toggled by Interrupt\r\n");
+    }
+  }
+}
+
+/* 定时器中断回调函数 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+  if (htim->Instance == TIM3) // 假设使用TIM3
+  {
+    // 从中断发送事件标志
+    xEventGroupSetBitsFromISR(
+        LED_EventHandle,
+        EVT_TIMER_UPDATE,
+        &xHigherPriorityTaskWoken);
+
+    // 如果需要任务切换，触发PendSV中断
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  }
+}
+
+/* 按键中断回调函数 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+  if (GPIO_Pin == KEY1_Pin)
+  {
+    // 从中断发送事件标志
+    xEventGroupSetBitsFromISR(
+        LED_EventHandle,
+        EVT_KEY_PRESS,
+        &xHigherPriorityTaskWoken);
+
+    DEBUG_Print("Key Interrupt Triggered!\r\n");
+
+    // 如果需要任务切换，触发PendSV中断
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  }
+}
+
+/* 串口接收中断回调函数 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+  if (huart->Instance == USART1)
+  {
+    // 从中断发送事件标志
+    xEventGroupSetBitsFromISR(
+        LED_EventHandle,
+        EVT_UART_CMD,
+        &xHigherPriorityTaskWoken);
+
+    // 如果需要任务切换，触发PendSV中断
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  }
+}

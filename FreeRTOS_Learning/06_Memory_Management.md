@@ -240,9 +240,6 @@ const osThreadAttr_t MemTest_attributes = {
     .priority = (osPriority_t)osPriorityNormal,
 };
 
-// 添加内存测试任务声明
-void MemTest_Task(void *argument);
-
 // 创建内存测试任务
   MemTestTaskHandle = osThreadNew(MemTest_Task, NULL, &MemTest_attributes);
   if(MemTestTaskHandle == NULL)
@@ -364,4 +361,309 @@ void MemTest_Task(void *argument)
 }
 ```
 
-您想了解哪个部分的具体内容？我们可以编写一些示例代码来实践这些概念。 
+## 七、实际代码示例
+
+以下是内存管理的完整示例代码：
+
+```c
+/* 内存池配置 */
+#define POOL_SIZE 10  // 内存池中的块数量
+#define BLOCK_SIZE 32 // 每个内存块的大小（字节）
+
+/* 内存测试配置 */
+#define TEST_SMALL_SIZE 32   // 小块内存大小
+#define TEST_MEDIUM_SIZE 128 // 中等内存大小
+#define TEST_LARGE_SIZE 512  // 大块内存大小
+#define TEST_COUNT 50        // 每种大小测试次数
+
+/* 内存池相关变量 */
+static uint8_t memPool[POOL_SIZE][BLOCK_SIZE]; // 内存池数组
+static uint8_t memPoolUsed[POOL_SIZE] = {0};   // 内存块使用状态 0-未使用 1-已使用
+static osMutexId_t memPoolMutexHandle;         // 内存池互斥量
+
+/* 内存池互斥量属性 */
+const osMutexAttr_t memPoolMutex_attributes = {
+    .name = "MemPoolMutex"
+};
+
+/* 内存池测试任务句柄 */
+osThreadId_t MemPoolTestTaskHandle;
+
+/* 内存池测试任务属性 */
+const osThreadAttr_t MemPoolTest_attributes = {
+    .name = "MemPoolTestTask",
+    .stack_size = 512,
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+/* 内存测试任务句柄 */
+osThreadId_t MemTestTaskHandle;
+
+/* 内存测试任务属性 */
+const osThreadAttr_t MemTest_attributes = {
+    .name = "MemTestTask",
+    .stack_size = 1024, // 增加堆栈大小以适应测试
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+/* 内存监控任务句柄 */
+osThreadId_t MemMonitorTaskHandle;
+
+/* 内存监控任务属性 */
+const osThreadAttr_t MemMonitor_attributes = {
+    .name = "MemMonitorTask",
+    .stack_size = 512,
+    .priority = (osPriority_t)osPriorityLow,
+};
+
+/* 内存池分配函数 */
+void *poolMalloc(void)
+{
+  void *ptr = NULL;
+
+  // 获取互斥量
+  if (osMutexAcquire(memPoolMutexHandle, osWaitForever) == osOK)
+  {
+    // 查找空闲内存块
+    for (int i = 0; i < POOL_SIZE; i++)
+    {
+      if (memPoolUsed[i] == 0)
+      {
+        memPoolUsed[i] = 1;
+        ptr = memPool[i];
+        DEBUG_Print("Memory block allocated: ");
+        DEBUG_PrintNum("Block", i);
+        break;
+      }
+    }
+
+    // 释放互斥量
+    osMutexRelease(memPoolMutexHandle);
+  }
+
+  return ptr;
+}
+
+/* 内存池释放函数 */
+void poolFree(void *ptr)
+{
+  // 获取互斥量
+  if (osMutexAcquire(memPoolMutexHandle, osWaitForever) == osOK)
+  {
+    // 查找要释放的内存块
+    for (int i = 0; i < POOL_SIZE; i++)
+    {
+      if (memPool[i] == ptr)
+      {
+        memPoolUsed[i] = 0;
+        DEBUG_Print("Memory block freed: ");
+        DEBUG_PrintNum("Block", i);
+        break;
+      }
+    }
+
+    // 释放互斥量
+    osMutexRelease(memPoolMutexHandle);
+  }
+}
+
+/* 内存池测试任务 */
+void MemPoolTest_Task(void *argument)
+{
+  void *ptr_array[5] = {NULL}; // 用于存储分配的内存指针
+
+  // 等待其他任务初始化完成
+  osDelay(1000);
+
+  for (;;)
+  {
+    DEBUG_Print("\r\n=== Memory Pool Test ===\r\n");
+
+    // 分配测试
+    DEBUG_Print("Allocating memory blocks...\r\n");
+    for (int i = 0; i < 5; i++)
+    {
+      ptr_array[i] = poolMalloc();
+      if (ptr_array[i] != NULL)
+      {
+        // 使用内存块，写入测试数据
+        uint8_t *data = (uint8_t *)ptr_array[i];
+        for (int j = 0; j < BLOCK_SIZE; j++)
+        {
+          data[j] = i + 1; // 填充测试数据
+        }
+      }
+      osDelay(200); // 延时以便观察
+    }
+
+    // 释放测试
+    DEBUG_Print("\r\nFreeing memory blocks...\r\n");
+    for (int i = 0; i < 5; i++)
+    {
+      if (ptr_array[i] != NULL)
+      {
+        poolFree(ptr_array[i]);
+        ptr_array[i] = NULL;
+      }
+      osDelay(200); // 延时以便观察
+    }
+
+    DEBUG_Print("\r\n=== Test Complete ===\r\n");
+    osDelay(5000); // 等待5秒后重新开始测试
+  }
+}
+
+/* 内存分配性能测试任务 */
+void MemTest_Task(void *argument)
+{
+  uint32_t start_time, end_time;
+  void *ptr_array[TEST_COUNT];
+  char buf[128];
+
+  // 等待其他任务初始化完成
+  osDelay(1000);
+
+  for (;;)
+  {
+    DEBUG_Print("\r\n=== Memory Allocation Performance Test ===\r\n");
+
+    // 1. 测试小块内存分配/释放性能
+    DEBUG_Print("\r\nTesting small block allocation...\r\n");
+    start_time = osKernelGetTickCount();
+
+    // 分配测试
+    for (int i = 0; i < TEST_COUNT; i++)
+    {
+      ptr_array[i] = pvPortMalloc(TEST_SMALL_SIZE);
+      if (ptr_array[i] != NULL)
+      {
+        // 写入一些测试数据
+        memset(ptr_array[i], 0xAA, TEST_SMALL_SIZE);
+      }
+    }
+
+    // 释放测试
+    for (int i = 0; i < TEST_COUNT; i++)
+    {
+      if (ptr_array[i] != NULL)
+      {
+        vPortFree(ptr_array[i]);
+      }
+    }
+
+    end_time = osKernelGetTickCount();
+    snprintf(buf, sizeof(buf), "Small blocks (%d bytes) test time: %ldms\r\n",
+             TEST_SMALL_SIZE, end_time - start_time);
+    DEBUG_Print(buf);
+
+    // 2. 测试中等大小内存块分配/释放性能
+    DEBUG_Print("\r\nTesting medium block allocation...\r\n");
+    start_time = osKernelGetTickCount();
+
+    for (int i = 0; i < TEST_COUNT; i++)
+    {
+      ptr_array[i] = pvPortMalloc(TEST_MEDIUM_SIZE);
+      if (ptr_array[i] != NULL)
+      {
+        memset(ptr_array[i], 0xBB, TEST_MEDIUM_SIZE);
+      }
+    }
+
+    for (int i = 0; i < TEST_COUNT; i++)
+    {
+      if (ptr_array[i] != NULL)
+      {
+        vPortFree(ptr_array[i]);
+      }
+    }
+
+    end_time = osKernelGetTickCount();
+    snprintf(buf, sizeof(buf), "Medium blocks (%d bytes) test time: %ldms\r\n",
+             TEST_MEDIUM_SIZE, end_time - start_time);
+    DEBUG_Print(buf);
+
+    // 3. 测试大块内存分配/释放性能
+    DEBUG_Print("\r\nTesting large block allocation...\r\n");
+    start_time = osKernelGetTickCount();
+
+    for (int i = 0; i < TEST_COUNT; i++)
+    {
+      ptr_array[i] = pvPortMalloc(TEST_LARGE_SIZE);
+      if (ptr_array[i] != NULL)
+      {
+        memset(ptr_array[i], 0xCC, TEST_LARGE_SIZE);
+      }
+    }
+
+    for (int i = 0; i < TEST_COUNT; i++)
+    {
+      if (ptr_array[i] != NULL)
+      {
+        vPortFree(ptr_array[i]);
+      }
+    }
+
+    end_time = osKernelGetTickCount();
+    snprintf(buf, sizeof(buf), "Large blocks (%d bytes) test time: %ldms\r\n",
+             TEST_LARGE_SIZE, end_time - start_time);
+    DEBUG_Print(buf);
+
+    // 输出当前内存状态
+    size_t freeHeap = xPortGetFreeHeapSize();
+    size_t minHeap = xPortGetMinimumEverFreeHeapSize();
+
+    snprintf(buf, sizeof(buf),
+             "\r\nMemory Status:\r\n"
+             "Current free heap: %d bytes\r\n"
+             "Minimum ever free heap: %d bytes\r\n"
+             "=================================\r\n",
+             freeHeap, minHeap);
+    DEBUG_Print(buf);
+
+    // 等待10秒后重新开始测试
+    osDelay(10000);
+  }
+}
+
+/* 内存监控任务实现 */
+void MemMonitor_Task(void *argument)
+{
+  char buf[256];
+
+  // 等待其他任务初始化完成
+  osDelay(1000);
+
+  for (;;)
+  {
+    // 获取当前空闲堆空间
+    size_t freeHeap = xPortGetFreeHeapSize();
+
+    // 获取历史最小空闲堆空间
+    size_t minHeap = xPortGetMinimumEverFreeHeapSize();
+
+    // 计算已使用的堆空间
+    size_t totalHeap = configTOTAL_HEAP_SIZE;
+    size_t usedHeap = totalHeap - freeHeap;
+
+    // 格式化并输出内存使用信息
+    snprintf(buf, sizeof(buf),
+             "\r\n=== Memory Status ===\r\n"
+             "Total Heap: %d bytes\r\n"
+             "Free Heap: %d bytes\r\n"
+             "Used Heap: %d bytes\r\n"
+             "Min Ever Free: %d bytes\r\n"
+             "Memory Usage: %d%%\r\n"
+             "==================\r\n",
+             totalHeap,
+             freeHeap,
+             usedHeap,
+             minHeap,
+             (usedHeap * 100) / totalHeap);
+
+    DEBUG_Print(buf);
+
+    // 每2秒更新一次内存信息
+    osDelay(2000);
+  }
+}
+```

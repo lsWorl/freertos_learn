@@ -236,3 +236,147 @@ typedef struct {
 1. 在开发调试阶段建议启用这些功能
 2. 在最终产品中，如果不需要任务状态监控，可以禁用以节省资源
 3. 修改配置后需要重新编译整个项目
+
+## 七、实际代码示例
+
+以下是任务管理的完整示例代码：
+
+```c
+/* 任务句柄定义 */
+osThreadId_t LED1TaskHandle;
+osThreadId_t LED2TaskHandle;
+osThreadId_t MonitorTaskHandle;
+
+/* 任务属性定义 */
+const osThreadAttr_t LED1Task_attributes = {
+    .name = "LED1Task",
+    .stack_size = 256,
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+const osThreadAttr_t LED2Task_attributes = {
+    .name = "LED2Task",
+    .stack_size = 256,
+    .priority = (osPriority_t)osPriorityNormal,
+};
+
+const osThreadAttr_t MonitorTask_attributes = {
+    .name = "MonitorTask",
+    .stack_size = 512,
+    .priority = (osPriority_t)osPriorityLow,
+};
+
+/* 任务函数实现 */
+void LED1_Task(void *argument)
+{
+  for(;;)
+  {
+    if (osSemaphoreAcquire(LED_SemHandle, osWaitForever) == osOK)
+    {
+      HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+    }
+  }
+}
+
+void LED2_Task(void *argument)
+{
+  uint32_t flags;
+
+  for(;;)
+  {
+    flags = osEventFlagsWait(LED_EventHandle,
+                             LED2_EVENT_BIT,
+                             osFlagsWaitAny,
+                             osWaitForever);
+    if ((flags & LED2_EVENT_BIT) == LED2_EVENT_BIT)
+    {
+      DEBUG_Print("LED2 event received!\r\n");
+      HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+    }
+  }
+}
+
+void Monitor_Task(void *argument)
+{
+  osDelay(1000); // 等待其他任务初始化完成
+
+  for(;;)
+  {
+    // 获取任务状态的文字描述
+    const char *led1_state_str, *led2_state_str, *key_state_str;
+
+    // LED1任务状态
+    switch (osThreadGetState(LED1TaskHandle))
+    {
+    case osThreadReady:
+      led1_state_str = "Ready";
+      break;
+    case osThreadRunning:
+      led1_state_str = "Running";
+      break;
+    case osThreadBlocked:
+      led1_state_str = "Blocked";
+      break;
+    case osThreadTerminated:
+      led1_state_str = "Terminated";
+      break;
+    default:
+      led1_state_str = "Unknown";
+      break;
+    }
+
+    // LED2任务状态
+    switch (osThreadGetState(LED2TaskHandle))
+    {
+    case osThreadReady:
+      led2_state_str = "Ready";
+      break;
+    case osThreadRunning:
+      led2_state_str = "Running";
+      break;
+    case osThreadBlocked:
+      led2_state_str = "Blocked";
+      break;
+    case osThreadTerminated:
+      led2_state_str = "Terminated";
+      break;
+    default:
+      led2_state_str = "Unknown";
+      break;
+    }
+
+    // 按键任务状态
+    switch (osThreadGetState(KEY_TaskHandle))
+    {
+    case osThreadReady:
+      key_state_str = "Ready";
+      break;
+    case osThreadRunning:
+      key_state_str = "Running";
+      break;
+    case osThreadBlocked:
+      key_state_str = "Blocked";
+      break;
+    case osThreadTerminated:
+      key_state_str = "Terminated";
+      break;
+    default:
+      key_state_str = "Unknown";
+      break;
+    }
+
+    DEBUG_Print("\r\nSystemStatus\r\n");
+    DEBUG_Print("LED1 Task: ");
+    DEBUG_Print(led1_state_str);
+    DEBUG_Print("\r\n");
+    DEBUG_Print("LED2 Task: ");
+    DEBUG_Print(led2_state_str);
+    DEBUG_Print("\r\n");
+    DEBUG_Print("KEY Task: ");
+    DEBUG_Print(key_state_str);
+    DEBUG_Print("\r\n");
+    DEBUG_Print("=\r\n");
+
+    osDelay(2000); // 增加状态打印的间隔时间
+  }
+}

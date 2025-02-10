@@ -40,6 +40,7 @@ learn_project\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h
 learn_project\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h
 learn_project\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h
 learn_project\main.o: ../Core/Inc/dma.h
+learn_project\main.o: ../Core/Inc/tim.h
 learn_project\main.o: ../Core/Inc/usart.h
 learn_project\main.o: D:\Keil_stm32\ARM\ARMCC\Bin\..\include\stdio.h
 learn_project\main.o: ../Core/Inc/gpio.h
