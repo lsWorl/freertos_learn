@@ -1,0 +1,15 @@
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
+learn_project\event_groups.o: D:\Keil_stm32\ARM\ARMCC\Bin\..\include\stdlib.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h
+learn_project\event_groups.o: D:\Keil_stm32\ARM\ARMCC\Bin\..\include\stddef.h
+learn_project\event_groups.o: D:\Keil_stm32\ARM\ARMCC\Bin\..\include\stdint.h
+learn_project\event_groups.o: ../Core/Inc/FreeRTOSConfig.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM3/portmacro.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h
+learn_project\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h
